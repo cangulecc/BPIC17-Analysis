@@ -3,16 +3,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-import os
 from pm4py.objects.log.importer.xes import importer as xes_importer
 from pm4py.algo.filtering.log.variants import variants_filter
 from pm4py.statistics.traces.generic.log import case_statistics
+from sklearn.cluster import KMeans
 
 random.seed(42)
 np.random.seed(42)
 
 print("Loading event log")
-log_path = "data.xes"
+log_path = "BPI_Challenge_2017.xes" 
 log = xes_importer.apply(log_path)
 df = pm4py.convert_to_dataframe(log)
 
@@ -109,7 +109,7 @@ net_ind, im_ind, fm_ind = pm4py.convert_to_petri_net(tree_ind)
 #Algorithm 2: Heuristic Miner
 net_heu, im_heu, fm_heu = heuristics_miner.apply(filtered_log, 
     parameters={
-        heuristics_miner.Variants.CLASSIC.value.Parameters.DEPENDENCY_THRESH: 0.9995,
+        heuristics_miner.Variants.CLASSIC.value.Parameters.DEPENDENCY_THRESH: 0.99,
         heuristics_miner.Variants.CLASSIC.value.Parameters.AND_MEASURE_THRESH: 0.90,
         heuristics_miner.Variants.CLASSIC.value.Parameters.MIN_ACT_COUNT: 10,
         heuristics_miner.Variants.CLASSIC.value.Parameters.LOOP_LENGTH_TWO_THRESH: 0.90
@@ -138,7 +138,7 @@ def evaluate_model(model_net, initial_marking, final_marking, log_sample):
         "Node Count (Custom Metric 1)": nodes,
         "Arc Density (Custom Metric 2)": arc_density
     }
-#Sample 200 cases for eval
+#Sample 400 cases for eval
 sample_log = pm4py.objects.log.obj.EventLog(random.sample(list(filtered_log), 400))
 print("\nResults for Inductive Miner:")
 results_ind = evaluate_model(net_ind, im_ind, fm_ind, sample_log)
@@ -152,4 +152,40 @@ bpmn_ind = pm4py.convert_to_bpmn(net_ind, im_ind, fm_ind)
 pm4py.write_bpmn(bpmn_ind, "model_inductive.bpmn")
 bpmn_heu = pm4py.convert_to_bpmn(net_heu, im_heu, fm_heu)
 pm4py.write_bpmn(bpmn_heu, "model_heuristic.bpmn")
-print("Done! Models saved as BPMN files.")
+print("Models saved as BPMN files.")
+
+#Advanced analysis: Kmeans
+print("Starting advanced analysis with KMeans clustering")
+np.random.seed(42)  
+random.seed(42)
+df_advanced = pm4py.convert_to_dataframe(filtered_log)
+X = df_advanced.pivot_table(
+    index = "case:concept:name",
+    columns = "concept:name",
+    aggfunc="size",
+    fill_value = 0
+)
+kmeans = KMeans(n_clusters = 2, random_state=42, n_init = 'auto')
+X['cluster'] = kmeans.fit_predict(X)
+print(f"Cluster 0 contains {sum(X['cluster']==0)} cases")
+print(f"Cluster 1 contains {sum(X['cluster']==1)} cases")
+
+cluster_0_cases = X[X['cluster'] == 0].index.tolist()
+cluster_1_cases = X[X['cluster'] == 1].index.tolist()
+
+df_cluster_0 = df_advanced[df_advanced['case:concept:name'].isin(cluster_0_cases)]
+df_cluster_1 = df_advanced[df_advanced['case:concept:name'].isin(cluster_1_cases)]
+
+cluster_0_log = pm4py.convert_to_event_log(df_cluster_0)
+cluster_1_log = pm4py.convert_to_event_log(df_cluster_1)
+
+print("Discovering BPMN for Cluster 0")
+net_0, im_0, fm_0 = pm4py.discover_petri_net_heuristics(cluster_0_log, dependency_threshold=0.99)
+bpmn_0 = pm4py.convert_to_bpmn(net_0, im_0, fm_0)
+pm4py.write_bpmn(bpmn_0, "bpmn_cluster_0.bpmn")
+
+print("Discovering BPMN for Cluster 1")
+net_1, im_1, fm_1 = pm4py.discover_petri_net_heuristics(cluster_1_log, dependency_threshold=0.99)
+bpmn_1 = pm4py.convert_to_bpmn(net_1, im_1, fm_1)
+pm4py.write_bpmn(bpmn_1, "bpmn_cluster_1.bpmn")
+print("Cluster models saved as BPMN files!")
