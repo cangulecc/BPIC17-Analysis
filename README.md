@@ -2,7 +2,7 @@
 Repository for the process mining analysis conducted for Bachelorpraktikum: Business Process Prediction, Simulation and Optimization. The objective was to analyze the BPI Challenge 2017 dataset, discover process models, and perform quality assessment to provide a reliable base model for simulation.
 To ensure reproducibility, ensure the following Python packages are installed:
 ```bash
-pip install pm4py pandas matplotlib numpy
+pip install pm4py pandas matplotlib numpy scikit-learn
 ```
 # How to Run
 1. Clone this repository to your local machine.
